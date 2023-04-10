@@ -1,0 +1,175 @@
+---
+title: "BAX452_Homework3_ArjunMahesh"
+author: "Arjun Velmurugan Mahesh"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+library(Hmisc)
+library(caTools)
+library(rsq)
+library(Metrics)
+library(glmnet)
+library(caret)
+#Setting working directory for data files
+knitr::opts_knit$set(root.dir = '/Users/arjunvelmurugan/Desktop/MSBA/BAX452')
+
+
+```
+
+[20 points] 
+Q1. For the above dataset (Dependent variable: heart_attack)
+How would you choose a sample subset (such as missing value, nulls, empty columns) of this dataset? What criteria would you consider when selecting a training subset from the above dataset (such as balanced distribution between training and test for the treated observations) ?
+
+Randomly split the dataset into test and training sets using 80% observations as training set. Fit a simple linear regression model (full model) to predict the heart attack probability and test your model against the test set.  Explain your model and obtain the R^2 for the predictions of the test data set (i.e., a true OOS R^2).
+
+```{r Question 1}
+q1 = read.csv("heart.csv")
+summary(q1)
+
+##When we have missing data sometimes we can ignore a column with a lot of missing data
+##If there are still NAs in the dataframe and the number is very low, we can remove the rows
+##If we still want to keep the rows in the data, we can predict or make guesses for what the value for the missing entry could be
+q1<-q1[,c(-7,-11,-15)] ##removing the columns that are sparsely populated
+q1<-na.omit(q1) ##removing rows with NA's
+summary(q1)
+##now we have a dataset with no NA's
+##now we train and test split the data
+set.seed(6314) #pseudo random split initialisation
+sample <- sample.split(q1[,1], SplitRatio = 0.8) ## splits data in training and test, with 80% of the df for training
+train  <- subset(q1, sample == TRUE) #making the train dataset
+test   <- subset(q1, sample == FALSE) #making the test dataset
+
+
+model1 <- lm(formula = heart_attack ~ ., data = train )  #Linear modeling heart_attack on all other params
+summary(model1) #looking at the summary of the model
+prediction<- predict(model1, test) #predictions using the test dataset
+y_train <- train$heart_attack
+y_test    <- test$heart_attack
+
+SS.total      <- sum((y_test - mean(y_train))^2)
+SS.residual   <- sum((y_test - prediction)^2)
+SS.regression <- sum((prediction - mean(y_test))^2)
+SS.total - (SS.regression+SS.residual)
+# [1] -63.8168
+
+# NOT the fraction of variability explained by the model
+test.rsq <- 1 - SS.residual/SS.total  
+test.rsq
+#[1] 0.8776176
+sprintf("The R-square from the generalized lineaer model is: %.4f",test.rsq)
+```
+
+Q2. [10 points] Explain cross-validation and highlight the problems that may be associated with a cross-validation approach.
+
+Ans: Cross-validation methods are a set of methods that measure test errors by splitting data into a training and test set. In these methods we "hold-out" a set of observations to apply the startistical modeling we decided by training on the data-sets that weren't held-out. 
+
+For ease of use we call these data sets, training and test datasets
+
+The issue with cross validation is that it only gives us an estimate of the error terms in question, we do not however have an understanding of the real value. The value gets more and more accurate with more iterations and the iterational process is a drawback.
+
+Q3. Use only the training sets from question 1 and estimate an 8-fold cross-validation to estimate the R^2 of the full model. e., use cross-validation to train (on 7/8 of the training set) and evaluate (on 1/8 of the training set).  Calculate the mean R^2 from the 8-fold cross-validation and compare it with the R^2 from question 1.  Please explain your observation.
+
+```{r Question 3}
+
+# Perform 8-fold cross-validation
+set.seed(6314)
+cv_results <- trainControl(method = "cv", number = 8, returnResamp = "all", savePredictions = TRUE)
+
+#lambda_grid <- expand.grid(lambda = seq(0, 1, length = 100)) #why?
+
+model_cv <- train(heart_attack ~ ., data = train, method = "lm", trControl = cv_results)
+print(model_cv)
+model_cv$pred
+# Extract the R-squared values from the cross-validation results
+rsquared_cv <- model_cv$resample[, "Rsquared"]
+
+# Calculate the mean R-squared from the 8-fold cross-validation
+mean_rsquared_cv <- mean(rsquared_cv)
+
+# Compare the mean R-squared from cross-validation with the R-squared from the full model
+
+cat("Mean R-squared from 8-fold cross-validation:", mean_rsquared_cv, "\n")
+
+```
+The R-square we have seen above it the mean R-square observed from every 8 r-square values that were observed during each fold of the cross validation approach. Where we fitted the generalized linear model to our training set in each fold. Here the tuning parameter was held constant. 
+
+Q4 : Explain Lasso regression and how does it work. List the pros and cons associated with using it.
+
+In OLS estimation we minimize 
+
+$$ RSS = \Sigma (Y_i - \beta_0 - \Sigma\beta_j x(i,j)) $$
+In a lasso regression we minimize:
+
+$$ RSS = \Sigma (Y_i - \beta_0 - \Sigma\beta_j x(i,j)) + \lambda \Sigma mod(\beta_j) $$
+In statistical terms, the lasso uses an l1 penalty on the RSS value. Lambda helps control for feature selection.
+
+Lasso is better that step-wise regression, forward and bacward selection methods. 
+It ignores non-significant variables and also is very bad estimator for causalities. 
+
+Q5 : Use again the training sets from question 1 and
+Fit a Lasso regression to predict the heart attack probability. Use cross-validation to obtain lambda_min as well as lambda_1se Explain the two resulting models. Which one would you choose?
+
+Compare model outputs from questions one, three, and five.
+
+```{r Question 5}
+
+# Fit the Lasso model with lambda_min and lambda_1se
+model_lasso <- cv.glmnet(x = as.matrix(train[,-17]), y = train$heart_attack, alpha = 1, nfolds = 8)
+
+
+# Extract lambda_min and lambda_1se
+lambda_min <- model_lasso$lambda.min
+lambda_1se <- model_lasso$lambda.1se
+
+plot(model_lasso)
+
+predictions_lasso <- predict(model_lasso, as.matrix(test[,-17]))
+
+# Find R-squared value
+rsq = 1 - model_lasso$cvm/test[,17]
+plot(model_lasso$lambda,rsq)
+
+model_lasso_min<-glmnet(x = as.matrix(train[,-17]), y = train$heart_attack, alpha = 1, nfolds = 8, lambda = lambda_min)
+summary(model_lasso_min)
+
+# Fit the Lasso model with lambda_min
+model_min <- glmnet(x = as.matrix(train[,-17]), y = train$heart_attack, alpha = 1, lambda = lambda_min)
+
+# Fit the Lasso model with lambda_1se
+model_1se <- glmnet(x = as.matrix(train[,-17]), y = train$heart_attack, alpha = 1, lambda = lambda_1se)
+
+# Calculate R-squared for each model on the test set
+#rsq_lin_reg <- summary(lin_reg)$r.squared
+Y_pred_min <- predict(model_min, as.matrix(test[,-17]), type = "response")
+Y_pred_1se <- predict(model_1se, as.matrix(test[,-17]), type = "response")
+
+SSE_min <- sum((test[,17] - Y_pred_min)^2) #Sum of squared error for residuals
+SST <- sum((test[,17] - mean(train[,17]))^2) #sum of squares total
+
+R2_min <- 1 - (SSE_min/SST)
+
+SSE_1se <- sum((test[,17] - Y_pred_1se)^2)
+
+R2_1se <- 1 - (SSE_1se/SST)
+
+sprintf("The R-square from the generalized lineaer model is: %.4f",test.rsq)
+cat("Mean R-squared from 8-fold cross-validation:", mean_rsquared_cv, "\n")
+sprintf("The R-squared value from lambda when MSE is min is %.4f", R2_min)
+sprintf("The R-squared value from lambda when MSE is 1 std. deviation from the min is %.4f", R2_1se)
+
+
+```
+As we can see all the R-squared values are very close to one another, Ideally the R-square from the k-fold cross validation should have been expected to lesser than the generalized linear model. The R-squared value for lambda_min is as expected lower than lambda_1se
+
+Q6. What is AIC, and how is it calculated? When to use AICc (corrected AIC)?
+
+
+AIC stands for Akaike Information Criterion. It is a measure of the relative quality of a statistical model, used to compare different models. It is calculated as AIC = 2k - 2ln(L), where k is the number of parameters in the model, and L is the maximum value of the likelihood function for the model. Lower values of AIC indicate better models.
+
+AICc is a corrected version of AIC that is used when the number of observations is small. AICc = AIC + (2k(k + 1)) / (n - k - 1), where n is the number of observations.
+
