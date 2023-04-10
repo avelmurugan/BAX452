@@ -1,0 +1,145 @@
+---
+title: "BAX452 - Assignment1"
+author: "Arjun Velmurugan Mahesh"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(dplyr)
+library(Hmisc)
+
+#Setting working directory for data files
+knitr::opts_knit$set(root.dir = '/Users/arjunvelmurugan/Desktop/MSBA/BAX452')
+
+
+```
+
+```{r DATASET 1 PART I (Q 1-3)}
+
+set.seed(6314) #seed is used to pseudo randomize any random output, i.e. you have replicability
+m <- matrix( rnorm(10000*1001,mean=0,sd=1), 10000, 1001) #initialising the 10000x1001 matrix with N(0,1) values
+df_m<-data.frame(m) 
+
+y <- m[,1] #setting your first row as target for the logistic regression we are about to run
+
+model <- glm(df_m[,1] ~., family = "gaussian", data = df_m) 
+#modelling the logistic regression, y regressed on all other 1000 features
+
+summary(model)
+
+##The intercept term has 3 components:
+##true intercept - (standardization makes this 0) 
+##constant impact of any specification error - (we can't expect this in current example, but we will likely encounter this elsewhere)
+##the mean from the error term - (also very likely 0 in current case, but could change in other situations)
+##THE INTERCEPT IS THEREFORE NOT NECESSARY IN THIS VERY PARTICULAR CASE
+```
+
+```{r DATASET 1 PART II QUESTION 4}
+
+pvals<-summary(model)[["coefficients"]][, "Pr(>|t|)"]
+#pulling out all the t-values for estimated coefficients, so as to apply the BH method
+
+hist(pvals,breaks = 10)
+#mapping the histogram of pvalues to ascertain uniform distribution as per expectation
+```
+
+```{R DATASET 1 Part III QUESTION 5}
+
+df_pvals<-data.frame(pvals)
+
+df_pvals %>% count(pvals < 0.01) 
+##We count the number of significant coefficient t-values we have received based on aplha = 0.01
+##There are 10, which is as expected 1% of 1000 = 10
+```
+
+```{R DATASET 1 Part IV Q6}
+#Now we start accounting for false discovery rate
+fdr <- function(pvals, q, plotit=FALSE){
+  pvals <- pvals[!is.na(pvals)]  
+  N <- length(pvals)
+  
+  k <- rank(pvals, ties.method="min")
+  alpha <- max(pvals[ pvals <= (q*k/N) ])
+  
+  if(plotit){
+    sig <- factor(pvals <= alpha)
+    o <- order(pvals)
+    plot(pvals[o], log="xy", col=c("grey60","red")[sig[o]], pch=20, 
+         ylab="p-values", xlab="tests ordered by p-value", main = paste('FDR =',q))
+    lines(1:N, q*(1:N) / N)
+  }
+  
+  return(alpha)
+}
+
+##This function we will use in two places, it is used to rank p-values in ascending order, then calculate the adjusted fdr for the coefficient in question i.e. calculate kQ/N, and then check to see at which point the inequality inflects
+##IF plotit is TRUE, it plots your t-values againts the FDR line
+
+fdr(pvals,0.1,TRUE)
+
+## As we can tsee there are 0 true discoveries
+
+```
+```{r DATASET 2 Part I Q7}
+autos<-data.frame(read.csv("autos.csv"))
+autos1<-read.csv("autos.csv")
+
+i<-0
+column_names<-names(autos)
+for(i in 1:ncol(autos))
+  {
+   print(i)
+   print(column_names[i])
+   print(table(autos[,i]))
+   i = i+1
+}
+##this loop creates an output that gives you column number, it's column name, it's unique outputs and their distribution
+```
+
+```{r DATASET 2 Part II Q7}
+#checking pairwise correlation for non-numeric data
+cor(autos[, sapply(autos, is.numeric)],
+    use = "complete.obs", method = "pearson")
+
+pairs(autos[, sapply(autos, is.numeric)])
+##plots pairwise correlation plots for all features
+
+#contrasts(autos[,1]) #haven't fully figured out how to use the contrasts function yet, but would have been useful here
+
+```
+
+```{r DATASET 2 PART III Q8}
+automodel<-lm(price ~ ., data = autos)
+summary(automodel)
+##modelling price on all the features of the dataset
+##THE ~. ensures that any cateogorical variables are automatically accounted for as dummies in the regression
+##This is the simplest model that can be run, given not a very theoretical guess can be made
+##This was done accounting for the fact that this assignment requires us to check for false discoveries
+##If we were to use lesser features our expected numbers would go down
+```
+
+```{R DATASET 2 PART IV}
+pvals_auto <- data.frame(summary(automodel)[["coefficients"]][, "Pr(>|t|)"])
+##We pull out p-values for all coefficients to account for false discovery rate
+features <- data.frame(names(automodel$coefficients))
+features <- features[!(row.names(features) %in% c("engine_typeohcf","fuel_systemidi")),]
+##removing enginetype ohcf and fuel system idi as they throw NA values, and may show perfect multicollinearity with another feature within their subdivision
+fp_matrix<-rbind(features, pvals_auto)
+
+df_pvals_auto<-data.frame(pvals_auto)
+
+df_pvals_auto %>% count(df_pvals_auto$summary.automodel....coefficients.......Pr...t.... < 0.01) 
+##There are 13 coefficients that are significant at the alpha = 0.01 level
+##At the 0.01% level we expect 0.53 false discoveries
+##This could mean one coefficient which was estimated could be a false discovery
+##Hence, we use the BH method to control for false discoveries in the experiment
+
+fdr(pvals_auto,0.1,TRUE)
+##Plotting the FDR line and 
+##Using the FDR method we can say there are 19 significant coefficients
+
+```
