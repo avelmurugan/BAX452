@@ -1,0 +1,115 @@
+---
+title: "BAX452_HW6_ArjunMahesh"
+author: "Arjun Velmurugan Mahesh"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#install.packages("caret")
+
+#Loading required libraries
+library(dplyr)
+library(ggplot2)
+library(psych)
+library(stats)
+library(gmodels)
+library(crosstable)
+library(fitdistrplus)
+library(logspline)
+library(reshape2)
+library(pastecs)
+library(Rcmdr)
+library(tidyr)
+library(pwr)
+library(graphics)
+library(data.table)
+library(rpart)
+library(caret)
+library(randomForest)
+
+
+#Setting working directory for data files
+knitr::opts_knit$set(root.dir = '~/Downloads')
+```
+
+# 1. [10 points] PCA (Principal Component Analysis) is an unsupervised ML method that is often used to reduce dimensionality of large data sets.
+Please explain how PCA can be used to reduce the number of variables.
+Please highlight limitations of PCA.
+
+Principal Component Analysis is the process by which the data is reoriented to find a orientation where the variance of the fit is reduced to give a set of components that helps us understand the data in ascending order of importance. It is an unsupervised learning approach, since there is no Y. 
+
+PCA's usecase is also for ease of visualization and pattern recognition for a given dataset. 
+
+On carrying out PCA, we can retain the components that explain the most amount of variation and reduce dimensionality of the dataset.
+
+
+The main limitations of PCA include:
+
+Interpretability: How many principle components to use and what do these new values mean are completely unclear and based on the practitioner. It's units and values are also not clear.
+
+Sensitivity to outliers: Data Pre-processing and Outlier removal have to be carried out prior to applying PCA. PCA is sensitive to outliers.  Outliers can skew the results of PCA.
+
+Data scaling: Since the new units are unknown, PCA is sensitive to the scaling of the data. 
+
+# 2. Trees are supervised algorithms that can be used for both regression and classification tasks. For the following trees, please explain how it is grown (i.e., how to select the variables to split on at each node)
+#Classification Tree
+#Regression Tree
+
+How To Build a Regression Tree:
+1. We devide the predictor space into J distinct and non-overlapping regions.
+2. For every region, we make a simple prediction, i.e. the mean of all observations within the region
+3. The goal is to find regions that minimize the Residual sum of squares across all regions. 
+4. We use a top-down, greedy approach called "Recursive Binary Splitting"
+5. It's top-down because it starts at the top and chooses to split from there
+6. It is a greedy algorithm because it chooses to split at each node based on the best split at that particular node and but does not look farther ahead to optimize tree performance. 
+7. In Recursive Binary Splitting, we first select the predictor Xj and the cutpoint s such that splitting the predictor space into the regions {X|Xj < s} and {X|Xj ≥ s} leads to the greatest possible reduction in RSS.
+8. The aim is to find optimum value for j and s
+
+How to Build a Classification Tree:
+
+
+Classification trees are very similar to regression trees, they mostly predict Qualitative over Quantitative Response. The growing of the tree is the same mechanism as the Regression tree, except in the Classification tree, at each step we don't optimize to reduce RSS, instead we optimize for Gini Impurity. 
+The Gini-Index is defined by:
+$$ G = \Sigma_k\ p_m (1-p_m) $$
+##Q3. Please explain how a tree is pruned?
+
+Tree pruning reduces decision tree size and overfitting. It involves removing non-predictive nodes and can be done before or after growing the tree. Pre-pruning includes limiting tree size by maximum depth, minimum samples per leaf, and minimum deviance decrease. Post-pruning involves removing branches that don't improve tree accuracy on a validation set, and techniques include reduced error pruning, cost complexity pruning, and subtree replacement pruning.
+
+##Q4 Please explain why a Random Forest usually outperforms regular regression methods (such as linear regression, logistic regression, and lasso regression).
+
+Random forests usually outperform regular regression methods like linear regression, logistic regression, and lasso regression because they are able to capture nonlinear relationships between variables and can handle high-dimensional datasets with many variables. 
+
+Random forests reduce overfitting by combining the predictions of multiple trees, each trained on a randomly sampled subset of the data and variables. This ensemble approach produces more robust and accurate predictions than a single tree or a traditional regression method.
+
+```{r Question 5}
+data <- read.csv('Transaction.csv')
+#Test-Train split
+library(caret)
+set.seed(6314) #pseudo-random reproduction 
+split <- caret::createDataPartition(data$payment_default, p = 0.8, list = FALSE)
+train_data <- data[split,]
+test_data <- data[-split,]
+
+#Building the classification tree
+tree_model <- rpart(payment_default ~ ., data = train_data, method = "class")
+
+#Making prediction based on the classification tree
+tree_pred <- predict(tree_model, newdata = test_data, type = "class")
+
+#Confusion matrix for the classification (a lot of what you see here is very similar to what we see with Logit)
+tree_CM <- confusionMatrix(table(tree_pred, test_data$payment_default))
+tree_CM
+```
+
+```
+
+```{r Question 5 Part 2}
+#Running the RandomForest on the same testbed, and predictions for the same
+rf_model <- randomForest(payment_default ~ ., data = train_data)
+rf_pred <- predict(rf_model, newdata = test_data)
+#Confusion matrix
+table(rf_pred, test_data$payment_default)
+```
