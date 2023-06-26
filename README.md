@@ -17,14 +17,32 @@ Treatment Effect
 
 
 Bootstrap
+
+
 Model Selection
+
+
 Classification
+
+
 Clustering
+
+
 Factors
+
+
 Trees
+
+
 Neural Networks
+
+
 Natural Language Processing
+
+
 Reinforcement Learning
+
+
 Spatiotemporal Analysis
 
 I learnt both basic underlying concepts and practical computational skills, including
