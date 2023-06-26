@@ -11,7 +11,11 @@ After taking this course, I learnt how to explore and analyze large highdimensio
 The topics included:
 
 Regression
+
+
 Treatment Effect
+
+
 Bootstrap
 Model Selection
 Classification
